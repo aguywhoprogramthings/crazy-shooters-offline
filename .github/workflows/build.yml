@@ -47,11 +47,21 @@ jobs:
 
   windows-launchers:
     runs-on: windows-2022
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - name: Verify Windows launchers with an occupied port
-        run: node --test test/windows_launcher.test.js
+        shell: pwsh
+        run: |
+          $output = & node --test --test-force-exit --test-timeout=60000 test/windows_launcher.test.js 2>&1
+          $result = $LASTEXITCODE
+          $text = $output | Out-String
+          Write-Host $text
+          if ($result -ne 0) {
+            $escaped = $text.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=Windows launcher test failed::$escaped"
+            exit $result
+          }

@@ -6,6 +6,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
 
 function request(port) {
@@ -19,22 +21,37 @@ function request(port) {
 }
 
 function runLauncher(command, args, port) {
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
+    // File handles avoid waiting forever for a background server that inherited
+    // a pipe from cmd.exe. Resolve on launcher exit, not on pipe closure.
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'crazy-shooters-launcher-'));
+    const stdoutPath = path.join(temp, 'stdout.txt');
+    const stderrPath = path.join(temp, 'stderr.txt');
+    const stdout = fs.openSync(stdoutPath, 'w');
+    const stderr = fs.openSync(stderrPath, 'w');
     const child = spawn(command, args, {
       cwd: path.resolve('crazy_shooters_offline'),
       env: { ...process.env, PORT: String(port), CSO_NO_BROWSER: '1' },
       windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', stdout, stderr]
     });
-    let output = '';
+    let finished = false;
+    const finish = (code, extra = '') => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      fs.closeSync(stdout); fs.closeSync(stderr);
+      const output = fs.readFileSync(stdoutPath, 'utf8') + fs.readFileSync(stderrPath, 'utf8') + extra;
+      // On Windows an inherited open handle can temporarily prevent removal.
+      try { fs.rmSync(temp, { recursive: true, force: true }); } catch (e) {}
+      resolve({ code, output });
+    };
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error('Launcher timed out: ' + output));
-    }, 45000);
-    child.stdout.on('data', chunk => { output += chunk; });
-    child.stderr.on('data', chunk => { output += chunk; });
-    child.on('error', error => { clearTimeout(timer); reject(error); });
-    child.on('close', code => { clearTimeout(timer); resolve({ code, output }); });
+      finish(null, '\nLauncher timed out.');
+    }, 40000);
+    child.on('error', error => finish(null, '\n' + error.message));
+    child.on('exit', code => finish(code));
   });
 }
 
@@ -59,7 +76,8 @@ async function checkLauncher(command, args) {
     assert.equal(await request(occupiedPort), 'old copy');
     assert.match(await request(port), /Optimized v2/);
   } finally {
-    if (serverPid) spawnSync('taskkill.exe', ['/PID', String(serverPid), '/T', '/F'], { windowsHide: true });
+    if (serverPid) spawnSync('taskkill.exe', ['/PID', String(serverPid), '/T', '/F'], { windowsHide: true, timeout: 10000 });
+    oldServer.closeAllConnections();
     await new Promise(resolve => oldServer.close(resolve));
   }
 }
