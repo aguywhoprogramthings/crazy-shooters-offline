@@ -132,6 +132,8 @@ npm test
 CHROMIUM_PATH=/path/to/chrome npm run test:browser
 # Optional live connection check; requires the original Photon service:
 CHROMIUM_PATH=/path/to/chrome npm run test:online
+# Optional deeper check: briefly creates a visible, two-player test room:
+CSO_ONLINE_ROOM_TEST=1 CHROMIUM_PATH=/path/to/chrome npm run test:online
 ```
 
 The browser smoke test serves the real package, verifies that online mode

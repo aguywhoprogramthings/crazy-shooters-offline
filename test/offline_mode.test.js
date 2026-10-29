@@ -93,6 +93,9 @@ test('online reads the actual Photon status without enabling offline mode', () =
   assert.equal(g.window.CrazyShootersOffline.getNetworkState(), 'connected');
   assert.equal(g.status.textContent, 'Online: connected');
   assert.ok(g.calls.every(call => call[0] === 'get' && (call[1] === 789 || call[1] === 987)));
+  g.h[g.ready + 11] = 0x1ffff; g.advance(1000);
+  assert.equal(g.window.CrazyShootersOffline.getNetworkState(), 'unknown');
+  assert.equal(g.status.textContent, 'Online mode');
 });
 
 test('invalid Photon metadata is never invoked or reported connected', () => {

@@ -143,8 +143,10 @@
               return;
             }
           } else {
-            const next = readOnlineState(mod, klass, limit);
-            if (next && next !== networkState) {
+            // If metadata disappears during a transition, stop claiming that
+            // the connection is ready until a validated read succeeds again.
+            const next = readOnlineState(mod, klass, limit) || 'unknown';
+            if (next !== networkState) {
               networkState = next;
               updateStatus();
             }
