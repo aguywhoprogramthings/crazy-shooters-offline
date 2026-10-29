@@ -8,11 +8,12 @@ const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 
-function startServer(command, script) {
+function startServer(command, script, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, [script], {
       cwd: path.resolve('crazy_shooters_offline'),
-      env: { ...process.env, HOST: '127.0.0.1', PORT: '0', PYTHONUNBUFFERED: '1' },
+      env: { ...process.env, HOST: '127.0.0.1', PORT: String(options.port ?? 0),
+        CSO_PORT_FILE: options.readyFile || '', PYTHONUNBUFFERED: '1' },
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let output = '';
@@ -75,12 +76,48 @@ async function checkServer(command, script) {
   }
 }
 
+async function checkOccupiedPort(command, script) {
+  const oldServer = http.createServer((req, res) => res.end('old copy'));
+  await new Promise((resolve, reject) => {
+    oldServer.once('error', reject);
+    oldServer.listen(0, '127.0.0.1', resolve);
+  });
+  const occupiedPort = oldServer.address().port;
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'crazy-shooters-ready-'));
+  const readyFile = path.join(temp, 'server.ready');
+  let child;
+  try {
+    const started = await startServer(command, script, { port: occupiedPort, readyFile });
+    child = started.child;
+    const [announcedPort, announcedPid] = fs.readFileSync(readyFile, 'utf8').trim().split(',').map(Number);
+    assert.equal(announcedPort, started.port);
+    assert.equal(announcedPid, child.pid);
+    assert.notEqual(announcedPort, occupiedPort);
+    assert.equal((await request(occupiedPort, '/')).body.toString(), 'old copy');
+    assert.match((await request(announcedPort, '/')).body.toString(), /Optimized v2/);
+  } finally {
+    if (child) child.kill();
+    await new Promise(resolve => oldServer.close(resolve));
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 test('Node server streams Unity assets with the right headers', async () => {
   await checkServer(process.execPath, 'server.js');
+});
+
+test('Node server announces its own port when an older copy occupies the requested port', async () => {
+  await checkOccupiedPort(process.execPath, 'server.js');
 });
 
 test('Python server streams Unity assets concurrently with the right headers', async t => {
   const python = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0);
   if (!python) return t.skip('Python is not installed');
   await checkServer(python, 'server.py');
+});
+
+test('Python server announces its own port when an older copy occupies the requested port', async t => {
+  const python = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0);
+  if (!python) return t.skip('Python is not installed');
+  await checkOccupiedPort(python, 'server.py');
 });

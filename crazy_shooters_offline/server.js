@@ -6,6 +6,21 @@ const DEFAULT_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8088;
 const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = fs.realpathSync(__dirname);
 
+// The Windows launchers need the port of *this* server, not merely the
+// default port (which may belong to an older copy). Publish it atomically
+// only after listen() succeeds. Manual launches do not need a ready file.
+function publishReadyFile(port) {
+  const readyFile = process.env.CSO_PORT_FILE;
+  if (!readyFile) return;
+  const temporaryFile = `${readyFile}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temporaryFile, `${port},${process.pid}\n`, { encoding: 'utf8', flag: 'wx' });
+    fs.renameSync(temporaryFile, readyFile);
+  } finally {
+    try { fs.unlinkSync(temporaryFile); } catch (err) { if (err.code !== 'ENOENT') throw err; }
+  }
+}
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -96,11 +111,19 @@ function createServer(port) {
 
   server.listen(port, HOST, () => {
     const actualPort = server.address().port;
+    try {
+      publishReadyFile(actualPort);
+    } catch (error) {
+      console.error('Could not publish server readiness:', error.message);
+      process.exitCode = 1;
+      server.close();
+      return;
+    }
     console.log('=======================================================');
-    console.log('🎮 Crazy Shooters Offline Server is RUNNING!');
-    console.log(`📡 URL: http://127.0.0.1:${actualPort}`);
-    console.log(`📂 Root: ${ROOT}`);
-    console.log('⚡ Gzip Streaming & Cross-Origin Isolation: ACTIVE');
+    console.log('Crazy Shooters Offline Server is RUNNING!');
+    console.log(`URL: http://127.0.0.1:${actualPort}`);
+    console.log(`Root: ${ROOT}`);
+    console.log('Gzip Streaming & Cross-Origin Isolation: ACTIVE');
     console.log('=======================================================');
   });
 }

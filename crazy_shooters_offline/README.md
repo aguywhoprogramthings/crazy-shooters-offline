@@ -8,10 +8,17 @@ package uses the prebuilt game binaries and optimizes the JavaScript around them
 
 1. On GitHub, open **Actions**, select a successful **Test and package** run for
    the branch you want, and download the `crazy-shooters-offline` artifact.
-2. Extract the artifact, then extract `crazy-shooters-offline.zip` inside it.
-3. On Windows, open `crazy_shooters_offline/start_game.bat` (or
-   `start_game.ps1`). Node.js or Python 3 must be installed.
-4. For a manual launch on any desktop OS, run one of these commands **from the
+   The repository's default branch may contain an older game; do not use its
+   green **Code → Download ZIP** button as a substitute for the build artifact.
+2. Extract the artifact, then extract `crazy-shooters-offline.zip` inside it
+   into a **new folder**, separate from any older copy.
+3. On Windows, open `crazy_shooters_offline/start_game.bat` in that new folder
+   (or `start_game.ps1`). Node.js or Python 3 must be installed. Keep the batch
+   console open while playing. If another server already uses port 8088, the
+   launcher waits for this copy's server and opens its actual port instead.
+4. Check the **bottom-left** of the game for **Optimized v2**, **Offline** and
+   the **Graphics** selector. If these are missing, an older copy is open.
+5. For a manual launch on any desktop OS, run one of these commands **from the
    `crazy_shooters_offline` folder**:
 
    ```sh
@@ -24,8 +31,7 @@ package uses the prebuilt game binaries and optimizes the JavaScript around them
    <http://127.0.0.1:8088/index.html>. Keep the server running while you play.
    The servers bind to loopback by default; `HOST` and `PORT` can override the
    address and port. If a port is in use, the server tries the next one and
-   prints the chosen URL. The Windows launchers open port 8088, so use the
-   manual command and printed URL if that port is occupied or you set `PORT`.
+   prints the chosen URL; open the printed URL, not an old browser bookmark.
 
 Use a desktop browser with WebGL support (Chrome or Edge are recommended).
 The page defaults to Photon's **local offline mode**; wait for the bottom-right
@@ -36,19 +42,28 @@ external service and is not guaranteed to work.
 
 ## Performance settings
 
-The bottom-right **Graphics** menu changes the internal rendering resolution
-and remembers your choice:
+The bottom-left **Graphics** menu changes the internal rendering resolution
+and remembers your choice for that browser and port:
 
 | Setting | Maximum drawing buffer | Use |
 | --- | --- | --- |
-| Balanced | 1280 × 720 | Default |
-| Performance | 960 × 540 | Try this first on a slow machine |
+| Performance | 960 × 540 | Default for new installations |
+| Ultra low | 640 × 360 | Try this if Performance is still too slow |
+| Balanced | 1280 × 720 | Sharper, more demanding |
 | Native | Browser viewport | Sharpest; most demanding |
 
 The game is stretched to the window at lower resolutions. Reducing resolution
-may make the image softer but reduces GPU work. Also try the game's own lower
-quality setting, enable hardware acceleration in your browser, update graphics
-drivers, and close other GPU-heavy applications. Reload after updating the
+makes the image softer but can reduce GPU work. The **Page fps** indicator is
+an estimate of browser animation callbacks, not necessarily the exact Unity
+rendered frame rate. It helps identify slowdowns but is not a performance
+guarantee.
+
+Also choose **Fastest** in the game's Options, close GPU-heavy applications,
+and enable browser hardware acceleration. In a regular Chrome or Edge window,
+open `chrome://gpu` or `edge://gpu`: the **Graphics Feature Status** section
+should report WebGL as hardware accelerated. Software-only rendering or a
+SwiftShader renderer can be much slower; enable acceleration, restart the
+browser, and update graphics drivers if needed. Reload after updating the
 package to avoid running cached scripts.
 
 The old trainer repeatedly scanned the entire 256 MiB Unity heap, blocking the
@@ -102,10 +117,10 @@ CHROMIUM_PATH=/path/to/chrome npm run test:browser
 ```
 
 The browser smoke test serves the real package, creates a local room, joins a
-match, checks weapon/physics toggles and the match clock, and exercises input,
-camera tracking, AI controls, and a second room with newly spawned weapon
-copies. CI uses software rendering and does not
-assert an FPS. GitHub Actions runs both suites, then packages the prebuilt
-Unity files and launchers into a downloadable artifact with a SHA-256 checksum.
-The workflow does not recompile Unity because the Unity source project is not
-in this repository.
+match, checks weapon/physics toggles and the match clock, and exercises input
+at reduced resolution, camera tracking, AI controls, and a second room with
+newly spawned weapon copies. CI uses software rendering and does not assert an
+FPS. GitHub Actions also tests the Windows launchers with a competing server
+on the requested port, and packages the prebuilt Unity files and launchers
+into a downloadable artifact with a SHA-256 checksum. The workflow does not
+recompile Unity because the Unity source project is not in this repository.

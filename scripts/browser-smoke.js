@@ -60,10 +60,13 @@ async function run() {
     });
     await page.goto(`http://127.0.0.1:${server.port}/index.html`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(() => window.CrazyShootersOffline && CrazyShootersOffline.getState() === 'offline', null, { timeout: 120000 });
+    assert.equal(await page.title(), 'Crazy Shooters - Optimized v2');
     assert.equal(await page.locator('#connection-mode').innerText(), 'Offline');
+    assert.equal(await page.locator('#graphics-quality').inputValue(), 'performance');
+    await page.waitForFunction(() => /^Page \d+ fps$/.test(document.getElementById('page-fps').textContent), null, { timeout: 30000 });
 
     // Exercise the transformed canvas and its corrected mouse coordinates: the
-    // actual Start button must work at a reduced drawing resolution.
+    // actual Start button must work at the lower drawing resolutions.
     await page.selectOption('#graphics-quality', 'performance');
     await page.waitForTimeout(1000);
     const size = await page.evaluate(() => {
@@ -72,7 +75,15 @@ async function run() {
         screenWidth: Math.round(rect.width), screenHeight: Math.round(rect.height) };
     });
     assert.deepEqual(size, { width: 720, height: 540, clientWidth: 720, clientHeight: 540, screenWidth: 800, screenHeight: 600 });
-    await clickGame(page, 400, 356); // Start -> lobby
+    await page.selectOption('#graphics-quality', 'ultra');
+    await page.waitForTimeout(1000);
+    const ultra = await page.evaluate(() => {
+      const c = gameInstance.Module.canvas, rect = c.getBoundingClientRect();
+      return { width: c.width, height: c.height, clientWidth: c.clientWidth, clientHeight: c.clientHeight,
+        screenWidth: Math.round(rect.width), screenHeight: Math.round(rect.height) };
+    });
+    assert.deepEqual(ultra, { width: 480, height: 360, clientWidth: 480, clientHeight: 360, screenWidth: 800, screenHeight: 600 });
+    await clickGame(page, 400, 356); // Start -> lobby at 360p
 
     await page.setViewportSize({ width: 640, height: 400 });
     await page.waitForTimeout(1500);

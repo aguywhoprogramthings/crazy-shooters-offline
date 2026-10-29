@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Crazy Shooters - Offline Edition</title>
+    <title>Crazy Shooters - Optimized v2</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
     <script>
@@ -107,10 +107,12 @@
       }
       .display-settings {
         position: fixed;
-        right: 12px;
+        left: 12px;
         bottom: 12px;
+        max-width: calc(100% - 24px);
         z-index: 100000;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 6px;
         padding: 6px 8px;
@@ -137,11 +139,14 @@
       </div>
     </div>
     <div class="display-settings">
+      <strong title="Shows that the optimized build is loaded">Optimized v2</strong>
       <span id="connection-mode" role="status">Preparing offline…</span>
+      <span id="page-fps" title="Browser animation frames per second; may differ from Unity's rendered frame rate">Page — fps</span>
       <label for="graphics-quality">Graphics</label>
       <select id="graphics-quality" title="Lower the rendering resolution to improve performance">
-        <option value="balanced">Balanced (720p max)</option>
         <option value="performance">Performance (540p max)</option>
+        <option value="ultra">Ultra low (360p max)</option>
+        <option value="balanced">Balanced (720p max)</option>
         <option value="native">Native resolution</option>
       </select>
     </div>

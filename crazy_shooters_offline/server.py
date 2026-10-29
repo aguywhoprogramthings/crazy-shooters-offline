@@ -7,6 +7,24 @@ DEFAULT_PORT = int(os.environ.get('PORT', '8088'))
 HOST = os.environ.get('HOST', '127.0.0.1')
 ROOT = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
 
+
+def publish_ready_file(port):
+    """Tell the launcher which port this particular server bound to."""
+    ready_file = os.environ.get('CSO_PORT_FILE')
+    if not ready_file:
+        return
+    temporary_file = f'{ready_file}.{os.getpid()}.tmp'
+    try:
+        with open(temporary_file, 'x', encoding='utf-8') as ready:
+            ready.write(f'{port},{os.getpid()}\n')
+        os.replace(temporary_file, ready_file)
+    finally:
+        try:
+            os.unlink(temporary_file)
+        except FileNotFoundError:
+            pass
+
+
 MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
     '.js': 'application/javascript; charset=utf-8',
@@ -84,11 +102,16 @@ def run_server(port=DEFAULT_PORT, host=HOST):
             # HTTPServer serialized those requests and slowed game startup.
             httpd = ThreadingHTTPServer((host, port), CrazyShootersHandler)
             actual_port = httpd.server_address[1]
+            try:
+                publish_ready_file(actual_port)
+            except OSError:
+                httpd.server_close()
+                raise
             print('=' * 55, flush=True)
-            print('🎮 Crazy Shooters Offline Server (Python) is RUNNING!', flush=True)
-            print(f'📡 URL: http://127.0.0.1:{actual_port}', flush=True)
-            print(f'📂 Root: {ROOT}', flush=True)
-            print('⚡ Gzip Streaming & Cross-Origin Isolation: ACTIVE', flush=True)
+            print('Crazy Shooters Offline Server (Python) is RUNNING!', flush=True)
+            print(f'URL: http://127.0.0.1:{actual_port}', flush=True)
+            print(f'Root: {ROOT}', flush=True)
+            print('Gzip Streaming & Cross-Origin Isolation: ACTIVE', flush=True)
             print('=' * 55, flush=True)
             httpd.serve_forever()
             break

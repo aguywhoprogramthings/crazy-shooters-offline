@@ -4,11 +4,12 @@
 
   const STORAGE_KEY = 'crazyShooters.graphics';
   const presets = {
-    balanced: { width: 1280, height: 720 },
+    ultra: { width: 640, height: 360 },
     performance: { width: 960, height: 540 },
+    balanced: { width: 1280, height: 720 },
     native: null
   };
-  let mode = 'balanced';
+  let mode = 'performance';
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (Object.prototype.hasOwnProperty.call(presets, saved)) mode = saved;
@@ -51,6 +52,36 @@
     return true;
   }
 
+  function startPageFrameMeter() {
+    const indicator = document.getElementById('page-fps');
+    if (!indicator || typeof window.requestAnimationFrame !== 'function') return;
+    let start = null;
+    let frames = 0;
+    function reset() {
+      start = null;
+      frames = 0;
+      indicator.textContent = 'Page — fps';
+    }
+    function frame(time) {
+      if (document.hidden) {
+        reset();
+      } else if (start === null) {
+        start = time;
+      } else {
+        frames++;
+        const elapsed = time - start;
+        if (elapsed >= 1000) {
+          indicator.textContent = 'Page ' + Math.round(frames * 1000 / elapsed) + ' fps';
+          start = time;
+          frames = 0;
+        }
+      }
+      window.requestAnimationFrame(frame);
+    }
+    document.addEventListener('visibilitychange', reset);
+    window.requestAnimationFrame(frame);
+  }
+
   function init() {
     const select = document.getElementById('graphics-quality');
     if (select) {
@@ -58,6 +89,7 @@
       select.addEventListener('change', function() { setMode(select.value); });
     }
     fitScreen();
+    startPageFrameMeter();
   }
 
   // Unity 2017's Emscripten mouse callbacks subtract the canvas rectangle from

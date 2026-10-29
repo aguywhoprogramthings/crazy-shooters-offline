@@ -44,3 +44,14 @@ jobs:
           name: browser-failure
           path: test-results/browser-failure.png
           if-no-files-found: ignore
+
+  windows-launchers:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Verify Windows launchers with an occupied port
+        run: node --test test/windows_launcher.test.js
