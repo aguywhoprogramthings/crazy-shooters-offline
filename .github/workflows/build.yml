@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   test-and-package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -29,7 +29,7 @@ jobs:
           zip -q -r crazy-shooters-offline.zip crazy_shooters_offline -x '*/__pycache__/*' '*.pyc'
           sha256sum crazy-shooters-offline.zip > crazy-shooters-offline.zip.sha256
       - name: Upload game package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: crazy-shooters-offline
           path: |
@@ -39,7 +39,7 @@ jobs:
           if-no-files-found: error
       - name: Upload browser failure screenshot
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-failure
           path: test-results/browser-failure.png
