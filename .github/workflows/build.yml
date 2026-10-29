@@ -1,0 +1,46 @@
+name: Test and package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install test dependencies
+        run: npm ci
+      - name: Unit and server tests
+        run: npm test
+      - name: Real Unity browser smoke test
+        run: npm run test:browser
+      - name: Package the checked-in game
+        run: |
+          zip -q -r crazy-shooters-offline.zip crazy_shooters_offline -x '*/__pycache__/*' '*.pyc'
+          sha256sum crazy-shooters-offline.zip > crazy-shooters-offline.zip.sha256
+      - name: Upload game package
+        uses: actions/upload-artifact@v4
+        with:
+          name: crazy-shooters-offline
+          path: |
+            crazy-shooters-offline.zip
+            crazy-shooters-offline.zip.sha256
+          compression-level: 0
+          if-no-files-found: error
+      - name: Upload browser failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure
+          path: test-results/browser-failure.png
+          if-no-files-found: ignore

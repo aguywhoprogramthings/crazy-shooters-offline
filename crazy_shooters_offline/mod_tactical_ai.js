@@ -43,6 +43,7 @@
 
   // Web Audio Context for Gunshot SFX
   let audioCtx = null;
+  let gunshotBuffer = null;
   function getAudioContext() {
     if (!audioCtx) {
       try {
@@ -63,14 +64,18 @@
       const now = ctx.currentTime;
       const vol = Math.max(0.05, Math.min(0.7, 1.0 - (distToPlayer / 70.0)));
       
-      const bufferSize = ctx.sampleRate * 0.12;
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.025));
+      // The synthesized noise is reusable; regenerating thousands of samples
+      // for every bot shot creates unnecessary work and garbage during combat.
+      if (!gunshotBuffer) {
+        const bufferSize = Math.floor(ctx.sampleRate * 0.12);
+        gunshotBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = gunshotBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.025));
+        }
       }
       const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
+      noise.buffer = gunshotBuffer;
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
@@ -597,6 +602,30 @@
   const activeBots = [];
   const killFeed = [];
 
+  // The original graph describes Factory only. Other bundled maps can be
+  // hundreds of units away, so translate that approximate graph near the
+  // local spawn instead of leaving every overlay bot stranded off-map. This is
+  // still an approximation, not a Unity collision/navigation mesh.
+  let navInitialized = false;
+  let navOffset = { x: 0, y: 0, z: 0 };
+  function alignNavigation(player) {
+    const center = { x: -65 + navOffset.x, y: 3.36 + navOffset.y, z: -20 + navOffset.z };
+    if (navInitialized && Math.abs(player.y - center.y) < 100 &&
+        Math.hypot(player.x - center.x, player.z - center.z) < 300) return;
+    const factory = player.x >= -165 && player.x <= 30 && player.y >= -30 && player.y <= 80 && player.z >= -110 && player.z <= 70;
+    const next = factory ? { x: 0, y: 0, z: 0 } : { x: player.x + 65, y: player.y - 3.36, z: player.z + 20 };
+    const dx = next.x - navOffset.x, dy = next.y - navOffset.y, dz = next.z - navOffset.z;
+    navOffset = next;
+    navInitialized = true;
+    if (!dx && !dy && !dz) return;
+    for (const node of NAV_GRAPH.nodes) { node.x += dx; node.y += dy; node.z += dz; }
+    for (const bot of activeBots) {
+      bot.x += dx; bot.y += dy; bot.z += dz;
+      bot.currentPath = []; bot.pathIndex = 0; bot.tracerLines = [];
+      if (bot.state !== 'DEAD') bot.state = 'PATROL';
+    }
+  }
+
   function addKillFeedEntry(killer, victim, weapon) {
     killFeed.unshift({ killer, victim, weapon, time: Date.now() });
     if (killFeed.length > 5) killFeed.pop();
@@ -616,6 +645,7 @@
   // --- Spatial 3D Camera Projection & Rendering ---
   let overlayCanvas = null;
   let overlayCtx = null;
+  let overlayDirty = false;
 
   function initOverlayCanvas() {
     overlayCanvas = document.getElementById('tactical-ai-overlay');
@@ -635,12 +665,15 @@
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    injectAIBadge();
   }
 
   function resizeCanvas() {
     if (!overlayCanvas) return;
-    overlayCanvas.width = window.innerWidth;
-    overlayCanvas.height = window.innerHeight;
+    const changed = overlayCanvas.width !== window.innerWidth || overlayCanvas.height !== window.innerHeight;
+    if (overlayCanvas.width !== window.innerWidth) overlayCanvas.width = window.innerWidth;
+    if (overlayCanvas.height !== window.innerHeight) overlayCanvas.height = window.innerHeight;
+    if (changed) overlayDirty = false; // Resizing the canvas clears it.
   }
 
   let cachedPlayerPos = null;
@@ -656,9 +689,13 @@
       if (state && state.pos) {
         cachedPlayerPos = state.pos;
         cachedPlayerRot = state.rot;
+        alignNavigation(state.pos);
         return;
       }
     }
+    // Do not keep drawing or aiming at the previous map after leaving a match.
+    cachedPlayerPos = null;
+    cachedPlayerRot = null;
   }
 
   function project3DToScreen(worldPos, camPos, camYaw, camPitch, fov = 60.0) {
@@ -671,8 +708,8 @@
     const dy = worldPos.y - (camPos.y + 1.6);
     const dz = worldPos.z - camPos.z;
 
-    const cosY = Math.cos(-camYaw);
-    const sinY = Math.sin(-camYaw);
+    const cosY = Math.cos(camYaw);
+    const sinY = Math.sin(camYaw);
     const rx = dx * cosY - dz * sinY;
     const rz = dx * sinY + dz * cosY;
 
@@ -695,6 +732,7 @@
     if (!camPos || !Number.isFinite(camPos.x)) return;
 
     activeBots.forEach(bot => {
+      bot.screenBounds = null;
       if (bot.state === 'DEAD') return;
       if (!Number.isFinite(bot.x) || !Number.isFinite(bot.y) || !Number.isFinite(bot.z)) return;
 
@@ -708,6 +746,10 @@
       const botWidth = botHeight * 0.45;
       const screenX = headProj.x;
       const screenY = headProj.y;
+      // Do not rasterize gradients, text and shadows for off-screen bots.
+      const margin = Math.max(80, botWidth);
+      if (screenX + margin < 0 || screenX - margin > overlayCanvas.width ||
+          feetProj.y + margin < 0 || screenY - margin > overlayCanvas.height) return;
 
       bot.screenBounds = {
         left: screenX - botWidth * 0.6,
@@ -760,7 +802,8 @@
       ctx.fill();
 
       ctx.beginPath();
-      ctx.roundRect(screenX - botWidth * 0.4, screenY + headRadius * 2, botWidth * 0.8, botHeight * 0.45, 4);
+      if (ctx.roundRect) ctx.roundRect(screenX - botWidth * 0.4, screenY + headRadius * 2, botWidth * 0.8, botHeight * 0.45, 4);
+      else ctx.rect(screenX - botWidth * 0.4, screenY + headRadius * 2, botWidth * 0.8, botHeight * 0.45);
       ctx.fill();
       ctx.stroke();
 
@@ -891,8 +934,8 @@
       const dx = bot.x - camPos.x;
       const dz = bot.z - camPos.z;
 
-      const cosY = Math.cos(-camYaw);
-      const sinY = Math.sin(-camYaw);
+      const cosY = Math.cos(camYaw);
+      const sinY = Math.sin(camYaw);
       const rx = dx * cosY - dz * sinY;
       const rz = dx * sinY + dz * cosY;
 
@@ -949,7 +992,9 @@
       const text = `${k.killer} [${k.weapon}] ${k.victim}`;
       const textW = ctx.measureText(text).width;
       ctx.fillStyle = `rgba(15, 23, 42, ${0.75 * alpha})`;
-      ctx.roundRect(right - textW - 16, y - 14, textW + 16, 22, 4);
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(right - textW - 16, y - 14, textW + 16, 22, 4);
+      else ctx.rect(right - textW - 16, y - 14, textW + 16, 22);
       ctx.fill();
 
       ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
@@ -964,6 +1009,7 @@
   }
 
   function handlePlayerFire() {
+    if (!overlayCanvas || !cachedPlayerPos) return;
     const centerScreenX = overlayCanvas.width * 0.5;
     const centerScreenY = overlayCanvas.height * 0.5;
 
@@ -1011,7 +1057,8 @@
   }
 
   window.addEventListener('mousedown', function(e) {
-    if (e.button === 0) {
+    const canvas = window.gameInstance && window.gameInstance.Module && window.gameInstance.Module.canvas;
+    if (e.button === 0 && canvas && (e.target === canvas || document.pointerLockElement === canvas)) {
       handlePlayerFire();
     }
   });
@@ -1063,6 +1110,7 @@
   }
 
   window.addEventListener('keydown', function(e) {
+    if (e.repeat) return;
     if (e.key === 'F10' || e.code === 'F10') {
       e.preventDefault();
       spawnBot();
@@ -1082,36 +1130,39 @@
     try {
       const dt = Math.min(0.1, (now - lastTime) / 1000.0);
       lastTime = now;
-
       updatePlayerState();
-      injectAIBadge();
-      updateAIStatusBadge();
+
+      const pPos = cachedPlayerPos;
+      const pRot = cachedPlayerRot;
+      let camYaw = 0;
+      let camPitch = 0;
+      if (pRot && pRot.length >= 4 && pRot.every(Number.isFinite)) {
+        const [x, y, z, w] = pRot;
+        camYaw = Math.atan2(2 * (w * y + x * z), 1 - 2 * (x * x + y * y));
+        // Unity's positive X rotation points down; project3DToScreen applies
+        // its inverse when converting world coordinates to the view.
+        camPitch = Math.asin(Math.max(-1, Math.min(1, 2 * (w * x - y * z))));
+      }
+
+      if (aiEngineEnabled && pPos) activeBots.forEach(bot => bot.update(dt, pPos));
+      if (hitMarkerTimer > 0) hitMarkerTimer -= dt;
 
       if (overlayCtx && overlayCanvas) {
-        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
-        if (hitMarkerTimer > 0) {
-          hitMarkerTimer -= dt;
-          renderHitMarker(overlayCtx);
+        const recentKill = killFeed.some(entry => Date.now() - entry.time < 6000);
+        const shouldDraw = hitMarkerTimer > 0 || recentKill ||
+          !!(pPos && (activeBots.length || radarVisible));
+        // In menus there is usually nothing to draw. Avoid clearing a full
+        // screen 2D canvas and compositing it on every Unity frame.
+        if (shouldDraw || overlayDirty) {
+          overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+          if (shouldDraw) {
+            renderHitMarker(overlayCtx);
+            renderBots(overlayCtx, pPos, camYaw, camPitch);
+            renderRadar(overlayCtx, pPos, camYaw);
+            renderKillFeed(overlayCtx);
+          }
+          overlayDirty = shouldDraw;
         }
-
-        const pPos = cachedPlayerPos;
-        const pRot = cachedPlayerRot;
-
-        let camYaw = 0;
-        let camPitch = 0;
-        if (pRot && pRot.length >= 4 && Number.isFinite(pRot[0]) && Number.isFinite(pRot[1]) && Number.isFinite(pRot[3]) && pRot[3] !== 0) {
-          camYaw = 2.0 * Math.atan2(pRot[1], pRot[3]);
-          camPitch = 2.0 * Math.atan2(pRot[0], pRot[3]);
-        }
-
-        if (aiEngineEnabled) {
-          activeBots.forEach(bot => bot.update(dt, pPos));
-        }
-
-        renderBots(overlayCtx, pPos, camYaw, camPitch);
-        renderRadar(overlayCtx, pPos, camYaw);
-        renderKillFeed(overlayCtx);
       }
     } catch (err) {
       console.warn('[Tactical AI onFrame error]', err);

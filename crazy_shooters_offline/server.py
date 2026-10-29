@@ -1,9 +1,11 @@
+import errno
 import os
-import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote, urlsplit
 
-DEFAULT_PORT = 8088
-ROOT = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_PORT = int(os.environ.get('PORT', '8088'))
+HOST = os.environ.get('HOST', '127.0.0.1')
+ROOT = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
 
 MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -20,14 +22,8 @@ MIME_TYPES = {
     '.data': 'application/octet-stream',
 }
 
-class CrazyShootersHandler(SimpleHTTPRequestHandler):
-    def translate_path(self, path):
-        path = path.split('?')[0].split('#')[0]
-        if path == '/' or path == '':
-            path = '/index.html'
-        clean = os.path.normpath(path.lstrip('/'))
-        return os.path.join(ROOT, clean)
 
+class CrazyShootersHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
         self.send_header('Cross-Origin-Embedder-Policy', 'require-corp')
@@ -35,28 +31,38 @@ class CrazyShootersHandler(SimpleHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-cache')
         super().end_headers()
 
-    def do_GET(self):
-        filepath = self.translate_path(self.path)
-        if not os.path.exists(filepath) or not os.path.isfile(filepath):
-            self.send_error(404, f"File Not Found: {self.path}")
+    def serve_game_file(self, send_body):
+        request_path = unquote(urlsplit(self.path).path)
+        if request_path in ('', '/'):
+            request_path = '/index.html'
+        if '\0' in request_path:
+            self.send_error(400, 'Invalid request path')
+            return
+        filepath = os.path.realpath(os.path.join(ROOT, request_path.lstrip('/')))
+        try:
+            allowed = os.path.commonpath((ROOT, filepath)) == ROOT
+        except ValueError:  # Different drives on Windows.
+            allowed = False
+        if not allowed:
+            self.send_error(403, 'Access Denied')
+            return
+        if not os.path.isfile(filepath):
+            self.send_error(404, f'File Not Found: {request_path}')
             return
 
         ext = os.path.splitext(filepath)[1].lower()
-        content_type = MIME_TYPES.get(ext, 'application/octet-stream')
-
         self.send_response(200)
-        self.send_header('Content-Type', content_type)
+        self.send_header('Content-Type', MIME_TYPES.get(ext, 'application/octet-stream'))
         self.send_header('Content-Length', str(os.path.getsize(filepath)))
-
         if ext == '.unityweb':
             self.send_header('Content-Encoding', 'gzip')
-
         self.end_headers()
+        if not send_body:
+            return
 
-        with open(filepath, 'rb') as f:
-            chunk_size = 64 * 1024
+        with open(filepath, 'rb') as game_file:
             while True:
-                chunk = f.read(chunk_size)
+                chunk = game_file.read(64 * 1024)
                 if not chunk:
                     break
                 try:
@@ -64,25 +70,35 @@ class CrazyShootersHandler(SimpleHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError):
                     break
 
-def run_server(port=DEFAULT_PORT):
+    def do_GET(self):
+        self.serve_game_file(True)
+
+    def do_HEAD(self):
+        self.serve_game_file(False)
+
+
+def run_server(port=DEFAULT_PORT, host=HOST):
     while True:
         try:
-            server_address = ('127.0.0.1', port)
-            httpd = HTTPServer(server_address, CrazyShootersHandler)
-            print("=" * 55)
-            print(f"🎮 Crazy Shooters Offline Server (Python) is RUNNING!")
-            print(f"📡 URL: http://127.0.0.1:{port}")
-            print(f"📂 Root: {ROOT}")
-            print("⚡ Gzip Streaming & Cross-Origin Isolation: ACTIVE")
-            print("=" * 55)
+            # Unity downloads several large files at once. A single-threaded
+            # HTTPServer serialized those requests and slowed game startup.
+            httpd = ThreadingHTTPServer((host, port), CrazyShootersHandler)
+            actual_port = httpd.server_address[1]
+            print('=' * 55, flush=True)
+            print('🎮 Crazy Shooters Offline Server (Python) is RUNNING!', flush=True)
+            print(f'📡 URL: http://127.0.0.1:{actual_port}', flush=True)
+            print(f'📂 Root: {ROOT}', flush=True)
+            print('⚡ Gzip Streaming & Cross-Origin Isolation: ACTIVE', flush=True)
+            print('=' * 55, flush=True)
             httpd.serve_forever()
             break
-        except OSError as e:
-            if e.errno == 10048:  # Port in use
-                print(f"Port {port} in use, trying {port + 1}...")
+        except OSError as error:
+            if error.errno in (errno.EADDRINUSE, 10048):
+                print(f'Port {port} in use, trying {port + 1}...', flush=True)
                 port += 1
             else:
                 raise
+
 
 if __name__ == '__main__':
     run_server()

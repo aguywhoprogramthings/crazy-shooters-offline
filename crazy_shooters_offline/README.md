@@ -1,100 +1,111 @@
-# 🎮 Crazy Shooters - Offline Standalone Edition
+# Crazy Shooters Offline
 
-A 100% offline, DRM-free, ad-free standalone playable package of **Crazy Shooters** (Unity WebGL).
+The checked-in Unity 2017 WebGL game, served locally with the existing gameplay
+mods and tactical-bot overlay. The Unity project/source is not included; this
+package uses the prebuilt game binaries and optimizes the JavaScript around them.
 
----
+## Download and start
 
-## 🚀 Quick Start (1-Click Launchers)
+1. On GitHub, open **Actions**, select a successful **Test and package** run for
+   the branch you want, and download the `crazy-shooters-offline` artifact.
+2. Extract the artifact, then extract `crazy-shooters-offline.zip` inside it.
+3. On Windows, open `crazy_shooters_offline/start_game.bat` (or
+   `start_game.ps1`). Node.js or Python 3 must be installed.
+4. For a manual launch on any desktop OS, run one of these commands **from the
+   `crazy_shooters_offline` folder**:
 
-### Method A: Windows Batch Launcher (Easiest)
-Double-click:
-📂 **`start_game.bat`**
+   ```sh
+   node server.js
+   # or
+   python3 server.py
+   ```
 
-### Method B: PowerShell Launcher
-Right-click and select **Run with PowerShell**:
-📂 **`start_game.ps1`**
+   Open the URL printed by the server, normally
+   <http://127.0.0.1:8088/index.html>. Keep the server running while you play.
+   The servers bind to loopback by default; `HOST` and `PORT` can override the
+   address and port. If a port is in use, the server tries the next one and
+   prints the chosen URL. The Windows launchers open port 8088, so use the
+   manual command and printed URL if that port is occupied or you set `PORT`.
 
-*Both launchers automatically boot the local streaming server in the background and launch Google Chrome or your default web browser directly in dedicated application mode (`--app=http://127.0.0.1:8088/index.html`).*
+Use a desktop browser with WebGL support (Chrome or Edge are recommended).
+The page defaults to Photon's **local offline mode**; wait for the bottom-right
+status to say **Offline**, then choose Start, create a room, continue, and join.
+The local room does not provide online multiplayer. To try the original network
+startup instead, add `?online=1` to the URL; this depends on the original
+external service and is not guaranteed to work.
 
----
+## Performance settings
 
-## 💻 Manual Launch
+The bottom-right **Graphics** menu changes the internal rendering resolution
+and remembers your choice:
 
-If you prefer launching via command line:
+| Setting | Maximum drawing buffer | Use |
+| --- | --- | --- |
+| Balanced | 1280 × 720 | Default |
+| Performance | 960 × 540 | Try this first on a slow machine |
+| Native | Browser viewport | Sharpest; most demanding |
 
-```powershell
-# Using Node.js:
-node server.js
+The game is stretched to the window at lower resolutions. Reducing resolution
+may make the image softer but reduces GPU work. Also try the game's own lower
+quality setting, enable hardware acceleration in your browser, update graphics
+drivers, and close other GPU-heavy applications. Reload after updating the
+package to avoid running cached scripts.
 
-# Or using Python 3:
-python server.py
+The old trainer repeatedly scanned the entire 256 MiB Unity heap, blocking the
+main thread. Discovery now searches only allocated memory in small scheduled
+slices, validates candidates, and stops scanning while the tab is hidden. In one
+software-rendered test, the old scanner consumed about **125 seconds of 134
+seconds**; the new scanner consumed about **0.26 seconds during a 100-second
+real-game smoke test**. These are diagnostic measurements, not an FPS promise:
+performance still depends on the browser, GPU, resolution, and scene. Software
+rendering can remain slow even when the scanning bottleneck is gone.
+
+## Controls and advantages
+
+| Control | Action |
+| --- | --- |
+| WASD / arrows, mouse | Move and look |
+| Left / right mouse | Fire / aim |
+| Space, C, Shift, R | Jump, crouch, sprint, reload |
+| 1–9 | Change weapon |
+| F6 | Infinite ammo / no reload |
+| F7 | Enhanced jump and movement speed |
+| F8 | Master toggle for ammo, physics, and rapid fire |
+| F9 | Rapid fire (0.75× shot delay, about 33% more shots per second) |
+| F10 | Spawn a tactical bot |
+| F11 | Pause / resume tactical AI |
+| F12 | Show / hide radar |
+| Tab / Esc | Scoreboard / options |
+
+The three gameplay mods start enabled and can also be toggled using their
+badges. Their original values are tracked and restored when disabled. The
+match-time lock is independent of F8 and keeps the local round open while the
+mod is running. Two tactical bots are created by default. They are a JavaScript
+visual/combat overlay, not native Unity or network players; navigation is
+approximate, especially outside the Factory map, and does not reproduce the
+actual map's collision mesh.
+
+The trainer targets the memory layout of the **bundled** Unity build. It
+validates classes and objects, and recognizes previously boosted copies where
+possible, but other Unity builds or ambiguous weapon configurations may not
+have the same offsets or baselines. No anti-detection guarantee is made.
+
+## Tests and GitHub build
+
+From the repository root, Node.js 20 or newer runs the automated checks:
+
+```sh
+npm ci
+npm test
+# Requires an installed Chrome/Chromium executable:
+CHROMIUM_PATH=/path/to/chrome npm run test:browser
 ```
 
-Then open your browser to **`http://127.0.0.1:8088/index.html`**.
-
----
-
-## 🕹️ Controls & Gameplay
-
-- **WASD / Arrow Keys**: Move
-- **Mouse**: Look around
-- **Left Click**: Fire / Attack
-- **Right Click**: Aim down sights
-- **R**: Reload
-- **Space**: Jump
-- **C**: Crouch
-- **Shift**: Sprint
-- **1 - 9**: Switch weapons (`BallisticKnife`, `Deagle`, `MP5KA4`, `STW-25`, `M87T`, `Blaser R93`, `RPG`, `M79`, `M67`)
-- **[F6]**: **Toggle Infinite Ammo & No Reload**
-- **[F7]**: **Toggle Enhanced Physics (Jump +85% & Speed +30%)**
-- **[F9]**: **Toggle Rapid Fire Rate (+30% Fire Speed)**
-- **[F8]**: **Master Toggle (All Mods On / Off)**
-- **Tab / Esc**: Scoreboard / Options
-
----
-
-## ⚡ Built-in Ultimate Mod Engine (v3.0)
-
-The game includes an integrated, zero-latency reverse-engineered trainer (`mod_ammo.js`):
-
-### 1. Infinite Ammo & No Reload (`[F6]`)
-- **Infinite Ammo**: Magazine capacity is locked at **999** bullets and reserve clips at **9999** for all weapons (MachineGun, ShotGun, GrenadeLauncher/RPG, Sniper).
-- **No Reload Needed**: The clip never empties, eliminating reloads entirely for continuous uninterrupted fire.
-- **Toggle**: Press **`[F6]`** or click the green badge to toggle between Modded and Vanilla ammo.
-
-### 2. Enhanced Physics: Jump & Speed Boost (`[F7]`)
-- **Jump Boost (+85%)**: `baseHeight` tuned from `1.0m` to `1.85m`. Allows effortlessly vaulting onto crates, metal shipping containers, barriers, and low roofs that are completely unreachable in vanilla settings.
-- **Controllable Physics**: Gravity remains at the standard tight $20.0\text{ m/s}^2$, ensuring snappy ascent/descent with zero floatiness or loss of aim control.
-- **Speed Boost (+30%)**:
-  - `WalkSpeed`: Boosted from `8.0` to `10.5` (+31%).
-  - `RunSpeed` (Sprint): Boosted from `11.5` to `15.0` (+30%).
-  - `maxForwardSpeed`, `maxSidewaysSpeed`, `maxBackwardsSpeed`: Boosted from `10.0` to `14.0` (+40%).
-- **Toggle**: Press **`[F7]`** or click the blue badge to instantly toggle between Boosted and Vanilla physics.
-
-### 3. Rapid Fire Rate (+30% Fire Speed) (`[F9]`)
-- **Natural & Anti-Detection Fire Rate**: Multiplies weapon shot delay / firing interval by **`0.75x`** (+33% Rounds Per Minute).
-- **Authentic Audio & Animation**: Avoids extreme or glitchy fire rates so that gun firing audio, muzzle flash, and recoil animations retain authentic fidelity and cannot be spotted as an obvious cheat ("never caught way too fast").
-- **Universal Coverage**: Dynamically accelerates MachineGun (MP5, AK-47, M4, Sniper, Pistol), ShotGun (M87T), GrenadeLauncher (RPG), and Ballistic Knife.
-- **Toggle**: Press **`[F9]`** or click the orange badge to toggle between Rapid and Vanilla fire rates.
-
-### 4. Master Toggle (`[F8]`)
-- Press **`[F8]`** to instantly toggle all 3 mods simultaneously.
-
-### 5. Dynamic IL2CPP Memory Engine
-- Dynamically resolves `MachineGun`, `shotGun`, `GrenadeLauncher`, `Knife`, `FPScontrollerMovement`, and `FPScontrollerJumping` classes and heap instances directly in WebGL asm.js memory.
-- Automatically caches vanilla baseline parameters and cleanly restores them when toggled off.
-- Executes inside `requestAnimationFrame` with **< 0.02ms** overhead (rock solid 60+ FPS).
-- Re-applies across player respawns, map reloads, and weapon switching.
-
----
-
-## 🛠️ Reverse Engineering & Modifications
-
-1. **Unity Engine Version**: Unity 2017.1.3f1 WebGL (asm.js).
-2. **Sitelock Bypass**: The game originally enforced domain checks (`GDValidDomain.CheckValid`) requiring `gamedistribution.com`, `freezenova.com`, etc. The package features:
-   - Binary-level patch in `game.data.unityweb` mapping `freezenova.com` to `127.0.0.1:8088`.
-   - JavaScript `document.URL` & `document.documentURI` property virtualization in `index.html`.
-3. **Offline Mock SDK (`gdsdk_mock.js`)**: All GameDistribution ad networks, OneTrust cookie modals, tracking pixels, and video prerolls are replaced with zero-latency instant offline callbacks.
-4. **Local HTTP Servers (`server.js` & `server.py`)**: Automatic `Content-Encoding: gzip` streaming for `.unityweb` packages, plus Cross-Origin Isolation headers (`COOP`/`COEP`).
-5. **Trainer Engine (`mod_ammo.js`)**: Real-time IL2CPP WebGL Emscripten heap inspection targeting `MachineGun`, `shotGun`, and `GrenadeLauncher` instances.
-
+The browser smoke test serves the real package, creates a local room, joins a
+match, checks weapon/physics toggles and the match clock, and exercises input,
+camera tracking, AI controls, and a second room with newly spawned weapon
+copies. CI uses software rendering and does not
+assert an FPS. GitHub Actions runs both suites, then packages the prebuilt
+Unity files and launchers into a downloadable artifact with a SHA-256 checksum.
+The workflow does not recompile Unity because the Unity source project is not
+in this repository.
