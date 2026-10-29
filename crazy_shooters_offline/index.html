@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Crazy Shooters - Optimized v2</title>
+    <title>Crazy Shooters - Optimized v3</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
     <script>
@@ -139,8 +139,13 @@
       </div>
     </div>
     <div class="display-settings">
-      <strong title="Shows that the optimized build is loaded">Optimized v2</strong>
-      <span id="connection-mode" role="status">Preparing offline…</span>
+      <strong title="Shows that the optimized online/offline build is loaded">Optimized v3</strong>
+      <label for="connection-select">Mode</label>
+      <select id="connection-select" title="Switching modes reloads the game and leaves the current room">
+        <option value="online">Online players</option>
+        <option value="offline">Offline / solo</option>
+      </select>
+      <span id="connection-mode" role="status">Online mode</span>
       <span id="page-fps" title="Browser animation frames per second; may differ from Unity's rendered frame rate">Page — fps</span>
       <label for="graphics-quality">Graphics</label>
       <select id="graphics-quality" title="Lower the rendering resolution to improve performance">

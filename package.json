@@ -5,7 +5,8 @@
   "description": "Tests and packaging for the offline Unity WebGL game",
   "scripts": {
     "test": "node --test",
-    "test:browser": "node scripts/browser-smoke.js"
+    "test:browser": "node scripts/browser-smoke.js",
+    "test:online": "node scripts/online-service-check.js"
   },
   "devDependencies": {
     "playwright-core": "1.64.1"

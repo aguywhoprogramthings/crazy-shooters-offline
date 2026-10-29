@@ -74,7 +74,7 @@ async function checkLauncher(command, args) {
     assert.notEqual(port, occupiedPort, result.output);
     assert.match(result.output, new RegExp(`Game URL: http://127\\.0\\.0\\.1:${port}/index\\.html`));
     assert.equal(await request(occupiedPort), 'old copy');
-    assert.match(await request(port), /Optimized v2/);
+    assert.match(await request(port), /Optimized v3/);
   } finally {
     if (serverPid) spawnSync('taskkill.exe', ['/PID', String(serverPid), '/T', '/F'], { windowsHide: true, timeout: 10000 });
     oldServer.closeAllConnections();

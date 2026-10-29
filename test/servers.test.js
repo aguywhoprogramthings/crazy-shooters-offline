@@ -94,7 +94,7 @@ async function checkOccupiedPort(command, script) {
     assert.equal(announcedPid, child.pid);
     assert.notEqual(announcedPort, occupiedPort);
     assert.equal((await request(occupiedPort, '/')).body.toString(), 'old copy');
-    assert.match((await request(announcedPort, '/')).body.toString(), /Optimized v2/);
+    assert.match((await request(announcedPort, '/')).body.toString(), /Optimized v3/);
   } finally {
     if (child) child.kill();
     await new Promise(resolve => oldServer.close(resolve));

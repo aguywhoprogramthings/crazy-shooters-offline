@@ -45,6 +45,24 @@ async function clickGame(page, x, y) {
   await page.waitForTimeout(2500);
 }
 
+async function photonOfflineMode(page) {
+  return page.evaluate(() => {
+    const m = gameInstance.Module, h = m.HEAP32, u = m.HEAPU8;
+    const k = CrazyShootersMod.getClassPointer('photonNetwork') || 20254584;
+    const limit = CrazyShootersHeapScanner.allocatedWords(m), ci = k / 4;
+    if (!CrazyShootersHeapScanner.isClass(h, ci, [10566946]) || ci + 39 >= limit) return null;
+    const table = h[ci + 16], count = h[ci + 39] & 0xffff;
+    if (table <= 0 || table % 4 || count > 512 || table / 4 + count > limit) return null;
+    for (let i = 0; i < count; i++) {
+      const method = h[table / 4 + i], p = method / 4;
+      if (method <= 0 || method % 4 || p + 11 >= limit || h[p + 3] !== k || !(h[p + 10] & 0x10) ||
+          (h[p + 11] >>> 16) !== 0 || h[p] <= 0) continue;
+      if (CrazyShootersHeapScanner.stringEquals(u, h[p + 2], 'get_offlineMode')) return m.dynCall_iii(h[p], 0, method);
+    }
+    return null;
+  });
+}
+
 async function run() {
   const server = await startServer();
   let browser, page;
@@ -56,14 +74,46 @@ async function run() {
     page.on('pageerror', error => errors.push(error.stack || String(error)));
     page.on('console', message => {
       const text = message.text();
-      if (text.includes('[Tactical AI onFrame error]') || text.includes('Could not enable Photon local mode') || text.includes('Camera rotation unavailable') || text.includes('Photon clock unavailable')) errors.push(text);
+      if (text.includes('[Tactical AI onFrame error]') || text.includes('Could not read or configure Photon mode') || text.includes('Camera rotation unavailable') || text.includes('Photon clock unavailable')) errors.push(text);
+    });
+    // Intercept rather than contact the public service: the normal CI smoke
+    // confirms the real Unity build attempts online networking without creating
+    // rooms or depending on external server availability.
+    let resolveSocket;
+    const socketSeen = new Promise(resolve => { resolveSocket = resolve; });
+    await page.routeWebSocket(/wss:\/\//, async ws => {
+      resolveSocket(ws.url());
+      await ws.close({ code: 1000, reason: 'CI network isolation' });
     });
     await page.goto(`http://127.0.0.1:${server.port}/index.html`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForFunction(() => window.CrazyShootersOffline && CrazyShootersOffline.getState() === 'offline', null, { timeout: 120000 });
-    assert.equal(await page.title(), 'Crazy Shooters - Optimized v2');
-    assert.equal(await page.locator('#connection-mode').innerText(), 'Offline');
+    await page.waitForFunction(() => window.CrazyShootersOffline && CrazyShootersOffline.getNetworkState() === 'disconnected', null, { timeout: 120000 });
+    assert.equal(await page.title(), 'Crazy Shooters - Optimized v3');
+    assert.equal(await page.locator('#connection-select').inputValue(), 'online');
+    assert.equal(await page.locator('#connection-mode').innerText(), 'Online: not connected');
+    assert.equal(await photonOfflineMode(page), 0);
     assert.equal(await page.locator('#graphics-quality').inputValue(), 'performance');
     await page.waitForFunction(() => /^Page \d+ fps$/.test(document.getElementById('page-fps').textContent), null, { timeout: 30000 });
+    await clickGame(page, 400, 356); // Start should request the original Photon service.
+    let socketTimeout;
+    const socketUrl = await Promise.race([
+      socketSeen,
+      new Promise((resolve, reject) => { socketTimeout = setTimeout(() => reject(new Error('Unity did not attempt an online WebSocket')), 60000); })
+    ]);
+    clearTimeout(socketTimeout);
+    assert.match(socketUrl, /^wss:\/\/ns\.exitgames\.com:19093\//);
+    assert.notEqual(await page.evaluate(() => CrazyShootersOffline.getNetworkState()), 'connected');
+    assert.equal(await photonOfflineMode(page), 0);
+
+    // The in-page selector must really reload into local mode, not merely
+    // change a label. The rest of this test exercises the offline game.
+    page.once('dialog', dialog => dialog.accept());
+    const switched = page.waitForURL(url => url.searchParams.get('mode') === 'offline', { timeout: 30000 });
+    await page.selectOption('#connection-select', 'offline');
+    await switched;
+    await page.waitForFunction(() => window.CrazyShootersOffline && CrazyShootersOffline.getState() === 'offline', null, { timeout: 120000 });
+    assert.equal(await page.locator('#connection-select').inputValue(), 'offline');
+    assert.equal(await page.locator('#connection-mode').innerText(), 'Offline');
+    assert.equal(await photonOfflineMode(page), 1);
 
     // Exercise the transformed canvas and its corrected mouse coordinates: the
     // actual Start button must work at the lower drawing resolutions.
@@ -210,6 +260,20 @@ async function run() {
     }
     await page.keyboard.press('F8');
     assert.deepEqual(await page.evaluate(() => [CrazyShootersMod.isAmmoEnabled(), CrazyShootersMod.isPhysicsEnabled(), CrazyShootersMod.isRapidFireEnabled()]), [true, true, true]);
+
+    // Canceling a switch keeps the room; confirming it starts a fresh online
+    // Unity instance with Photon offline mode disabled again.
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.selectOption('#connection-select', 'online');
+    assert.equal(await page.locator('#connection-select').inputValue(), 'offline');
+    assert.equal(await page.evaluate(() => CrazyShootersOffline.getState()), 'offline');
+    page.once('dialog', dialog => dialog.accept());
+    const onlineAgain = page.waitForURL(url => url.searchParams.get('mode') === 'online', { timeout: 30000 });
+    await page.selectOption('#connection-select', 'online');
+    await onlineAgain;
+    await page.waitForFunction(() => window.CrazyShootersOffline && CrazyShootersOffline.getNetworkState() === 'disconnected', null, { timeout: 120000 });
+    assert.equal(await page.evaluate(() => localStorage.getItem('crazyShooters.connectionMode')), 'online');
+    assert.equal(await photonOfflineMode(page), 0);
     assert.deepEqual(errors, []);
     console.log('Browser smoke passed:', JSON.stringify({ player: rejoined.player.pos, weaponCopies: rejoined.on.length, bots: beforeBots + 1, scanner: rejoined.stats }));
   } catch (error) {

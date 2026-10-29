@@ -1,9 +1,9 @@
-# Crazy Shooters - Offline PowerShell Launcher
+# Crazy Shooters - Online and Offline PowerShell Launcher
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $ScriptDir
 
 Write-Host "=======================================================" -ForegroundColor Cyan
-Write-Host "         CRAZY SHOOTERS - OFFLINE EDITION              " -ForegroundColor Yellow
+Write-Host "         CRAZY SHOOTERS - ONLINE AND OFFLINE            " -ForegroundColor Yellow
 Write-Host "=======================================================" -ForegroundColor Cyan
 Write-Host "Starting the server for this copy of the game..." -ForegroundColor Green
 

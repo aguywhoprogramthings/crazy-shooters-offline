@@ -108,7 +108,7 @@ def run_server(port=DEFAULT_PORT, host=HOST):
                 httpd.server_close()
                 raise
             print('=' * 55, flush=True)
-            print('Crazy Shooters Offline Server (Python) is RUNNING!', flush=True)
+            print('Crazy Shooters Local Web Server (Python) is RUNNING!', flush=True)
             print(f'URL: http://127.0.0.1:{actual_port}', flush=True)
             print(f'Root: {ROOT}', flush=True)
             print('Gzip Streaming & Cross-Origin Isolation: ACTIVE', flush=True)

@@ -1,10 +1,10 @@
 @echo off
 setlocal
-title Crazy Shooters - Offline Launcher
+title Crazy Shooters - Online and Offline Launcher
 cd /d "%~dp0"
 
 echo =======================================================
-echo          CRAZY SHOOTERS - OFFLINE EDITION
+echo        CRAZY SHOOTERS - ONLINE AND OFFLINE
 echo =======================================================
 echo Starting the server for this copy of the game...
 

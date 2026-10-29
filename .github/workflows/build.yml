@@ -45,6 +45,26 @@ jobs:
           path: test-results/browser-failure.png
           if-no-files-found: ignore
 
+  online-service:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Check the original Photon service (informational)
+        continue-on-error: true
+        run: |
+          if npm run test:online; then
+            echo "::notice title=Photon live check::The Unity client reported an online connection from the GitHub runner."
+          else
+            echo "::warning title=Photon live check::Could not confirm a connection from the GitHub runner; the external service or network may be unavailable."
+            exit 1
+          fi
+
   windows-launchers:
     runs-on: windows-2022
     timeout-minutes: 5

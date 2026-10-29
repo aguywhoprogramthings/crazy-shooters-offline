@@ -120,7 +120,7 @@ function createServer(port) {
       return;
     }
     console.log('=======================================================');
-    console.log('Crazy Shooters Offline Server is RUNNING!');
+    console.log('Crazy Shooters Local Web Server is RUNNING!');
     console.log(`URL: http://127.0.0.1:${actualPort}`);
     console.log(`Root: ${ROOT}`);
     console.log('Gzip Streaming & Cross-Origin Isolation: ACTIVE');

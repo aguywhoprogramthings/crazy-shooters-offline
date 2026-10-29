@@ -1,8 +1,9 @@
 # Crazy Shooters Offline
 
-The checked-in Unity 2017 WebGL game, served locally with the existing gameplay
-mods and tactical-bot overlay. The Unity project/source is not included; this
-package uses the prebuilt game binaries and optimizes the JavaScript around them.
+The checked-in Unity 2017 WebGL game, with the original online multiplayer
+connection, an optional local offline mode, the existing gameplay mods and a
+tactical-bot overlay. The Unity project/source is not included; this package
+uses the prebuilt game binaries and optimizes the JavaScript around them.
 
 ## Download and start
 
@@ -16,8 +17,9 @@ package uses the prebuilt game binaries and optimizes the JavaScript around them
    (or `start_game.ps1`). Node.js or Python 3 must be installed. Keep the batch
    console open while playing. If another server already uses port 8088, the
    launcher waits for this copy's server and opens its actual port instead.
-4. Check the **bottom-left** of the game for **Optimized v2**, **Offline** and
-   the **Graphics** selector. If these are missing, an older copy is open.
+4. Check the **bottom-left** of the game for **Optimized v3**, the **Mode**
+   selector and the **Graphics** selector. If these are missing, an older copy
+   is open. Select **Online players** to use the original multiplayer service.
 5. For a manual launch on any desktop OS, run one of these commands **from the
    `crazy_shooters_offline` folder**:
 
@@ -34,11 +36,20 @@ package uses the prebuilt game binaries and optimizes the JavaScript around them
    prints the chosen URL; open the printed URL, not an old browser bookmark.
 
 Use a desktop browser with WebGL support (Chrome or Edge are recommended).
-The page defaults to Photon's **local offline mode**; wait for the bottom-right
-status to say **Offline**, then choose Start, create a room, continue, and join.
-The local room does not provide online multiplayer. To try the original network
-startup instead, add `?online=1` to the URL; this depends on the original
-external service and is not guaranteed to work.
+**Online players** is the default for a fresh installation. Choose **Start** to
+connect to the original Photon multiplayer service, then join a listed room or
+create one. The bottom-left status changes from **Online: not connected** to
+**Online: connecting…** and, when Photon reports it is ready,
+**Online: connected**. The external service must be available and reachable;
+the local web server only serves the game files and is not a multiplayer server.
+
+To play without a network connection, select **Offline / solo** in the **Mode**
+menu and confirm the reload. Wait for the status to say **Offline**, then
+choose Start, create a room, continue, and join. Offline rooms are local to one
+browser and cannot contain other online players. The mode choice is remembered
+for that browser and port; changing it reloads the game and leaves any current
+room. `?online=1`, `?offline=1`, and `?mode=online` / `?mode=offline` can also
+explicitly choose a mode for a link, overriding the saved preference.
 
 ## Performance settings
 
@@ -95,10 +106,15 @@ rendering can remain slow even when the scanning bottleneck is gone.
 The three gameplay mods start enabled and can also be toggled using their
 badges. Their original values are tracked and restored when disabled. The
 match-time lock is independent of F8 and keeps the local round open while the
-mod is running. Two tactical bots are created by default. They are a JavaScript
-visual/combat overlay, not native Unity or network players; navigation is
-approximate, especially outside the Factory map, and does not reproduce the
-actual map's collision mesh.
+mod is running. In online rooms, the server and other players may enforce their
+own timing and rules; client-side changes are not guaranteed to be accepted or
+synchronized. Observe the rules of any room you join.
+
+Two tactical bots are created by default. They are a local JavaScript
+visual/combat overlay, not native Unity or network players: **other online
+players cannot see or interact with them**. Navigation is approximate,
+especially outside the Factory map, and does not reproduce the map's collision
+mesh.
 
 The trainer targets the memory layout of the **bundled** Unity build. It
 validates classes and objects, and recognizes previously boosted copies where
@@ -114,13 +130,20 @@ npm ci
 npm test
 # Requires an installed Chrome/Chromium executable:
 CHROMIUM_PATH=/path/to/chrome npm run test:browser
+# Optional live connection check; requires the original Photon service:
+CHROMIUM_PATH=/path/to/chrome npm run test:online
 ```
 
-The browser smoke test serves the real package, creates a local room, joins a
-match, checks weapon/physics toggles and the match clock, and exercises input
-at reduced resolution, camera tracking, AI controls, and a second room with
-newly spawned weapon copies. CI uses software rendering and does not assert an
-FPS. GitHub Actions also tests the Windows launchers with a competing server
-on the requested port, and packages the prebuilt Unity files and launchers
-into a downloadable artifact with a SHA-256 checksum. The workflow does not
-recompile Unity because the Unity source project is not in this repository.
+The browser smoke test serves the real package, verifies that online mode
+attempts the original Photon WebSocket (intercepted in CI), switches to offline,
+creates a local room, joins a match, checks weapon/physics toggles and the match
+clock, and exercises input at reduced resolution, camera tracking, AI controls,
+and a second room with newly spawned weapon copies. CI uses software rendering
+and does not assert an FPS. GitHub Actions also tests the Windows launchers
+with a competing server on the requested port, and packages the prebuilt Unity
+files and launchers into a downloadable artifact with a SHA-256 checksum. The
+workflow does not recompile Unity because the Unity source project is not in
+this repository. A separate, non-blocking GitHub check tries a live connection
+without creating or joining a room. Even if it succeeds, availability can vary
+by time, region and network; an intercepted WebSocket test alone does not prove
+that the external multiplayer service is reachable.
