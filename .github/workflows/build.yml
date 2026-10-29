@@ -47,7 +47,7 @@ jobs:
 
   online-service:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -57,9 +57,11 @@ jobs:
       - run: npm ci
       - name: Check the original Photon service (informational)
         continue-on-error: true
+        env:
+          CSO_ONLINE_ROOM_TEST: '1'
         run: |
           if npm run test:online; then
-            echo "::notice title=Photon live check::The Unity client reported an online connection from the GitHub runner."
+            echo "::notice title=Photon live check::The Unity client connected, created a temporary test room and spawned from the GitHub runner."
           else
             echo "::warning title=Photon live check::Could not confirm a connection from the GitHub runner; the external service or network may be unavailable."
             exit 1

@@ -1,9 +1,11 @@
 'use strict';
 
 // Optional live check: use the actual Unity client and original Photon service.
-// This does not create or join a room. Unlike the main browser smoke test, it
-// requires outbound network access and is inherently dependent on a third party.
+// By default this does not create or join a room. A temporary public test room
+// is only created when CSO_ONLINE_ROOM_TEST=1 is explicitly set. Unlike the
+// main browser smoke test, this depends on a third-party service and network.
 const { spawn } = require('node:child_process');
+const { randomBytes } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { chromium } = require('playwright-core');
@@ -37,6 +39,34 @@ function browserPath() {
   return executable;
 }
 
+async function clickGame(page, x, y) {
+  await page.mouse.move(x, y);
+  await page.mouse.down(); await page.waitForTimeout(800); await page.mouse.up();
+  await page.waitForTimeout(2500);
+}
+
+async function exerciseTemporaryRoom(page) {
+  // Distinct CI-labelled 8-character name, two-player limit, no shots. Closing
+  // the browser disconnects the sole test player and closes the temporary room.
+  const name = 'CI' + randomBytes(3).toString('hex').toUpperCase();
+  await page.waitForTimeout(3000);
+  await clickGame(page, 512, 136); // Lobby -> Create room
+  await page.evaluate(() => { const hud = document.getElementById('mod-hud-container'); if (hud) hud.style.display = 'none'; });
+  await clickGame(page, 260, 140); // Room name field
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type(name, { delay: 150 });
+  await clickGame(page, 230, 180); // Two-player limit
+  const joined = page.waitForEvent('console', { predicate: message => message.text().includes('Joined room:'), timeout: 120000 });
+  await clickGame(page, 512, 136); // Continue / create
+  const message = await joined;
+  if (!message.text().includes('Joined room: ' + name)) throw new Error('Joined a different room than the temporary test room.');
+  await page.waitForFunction(() => CrazyShootersMod.getInstances().rmm > 0, null, { timeout: 120000 });
+  await page.waitForTimeout(2000);
+  await clickGame(page, 485, 92); // Join battle
+  await page.waitForFunction(() => CrazyShootersMod.getPlayerState() !== null, null, { timeout: 120000 });
+  console.log('Live Photon room check: created the temporary room and spawned.');
+}
+
 async function run() {
   const server = await startServer();
   let browser;
@@ -59,6 +89,7 @@ async function run() {
       const state = await page.evaluate(() => CrazyShootersOffline.getNetworkState()).catch(() => 'unknown');
       throw new Error('Could not confirm a live Photon connection: ' + JSON.stringify({ state, websocketHosts: [...hosts] }));
     }
+    if (process.env.CSO_ONLINE_ROOM_TEST === '1') await exerciseTemporaryRoom(page);
   } finally {
     if (browser) await browser.close();
     server.child.kill();
